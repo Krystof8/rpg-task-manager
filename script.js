@@ -65,11 +65,27 @@ function renderTasks() {
         
         const li = document.createElement('li');
         li.className = 'task-item';
+
+        const dateInfo = t.done
+            ? `<span class="task-date">📅 ${t.createdAt || '?'} &nbsp;✅ ${t.doneAt || '?'}</span>`
+            : `<span class="task-date">📅 ${t.createdAt || '?'}</span>`;
+
+        if (li.dataset.editing) {
+            // editační stav (viz níže)
+        }
+
         li.innerHTML = `
-            <div><strong>${t.text}</strong><br><small>${t.diff} XP/G</small></div>
+            <div class="task-info">
+                <strong>${t.text}</strong>
+                <small>${t.diff} XP/G</small>
+                ${dateInfo}
+            </div>
             <div style="display:flex; gap:8px;">
-                ${!t.done ? `<button onclick="completeTask(${i})" style="background:var(--success); border:none; width:40px; cursor:pointer;">✓</button>` : ''}
-                <button onclick="deleteTask(${i})" style="background:var(--danger); border:none; width:40px; cursor:pointer;">✕</button>
+                ${!t.done ? `
+                    <button onclick="startEdit(${i})" class="btn-icon btn-edit">✏️</button>
+                    <button onclick="completeTask(${i})" class="btn-icon btn-done">✓</button>
+                ` : ''}
+                <button onclick="deleteTask(${i})" class="btn-icon btn-del">✕</button>
             </div>
         `;
         t.done ? dList.appendChild(li) : pList.appendChild(li);
@@ -84,6 +100,7 @@ window.chooseAvatar = (type, icon) => {
 window.completeTask = (i) => {
     const oldLvl = getLevelAtXP(xp);
     tasks[i].done = true;
+    tasks[i].doneAt = new Date().toLocaleDateString('cs-CZ');
     xp += tasks[i].diff;
     gold += tasks[i].diff;
     
@@ -153,10 +170,14 @@ window.setFilter = (val) => {
 document.getElementById('add-task-btn').onclick = () => {
     const inp = document.getElementById('task-input');
     if (!inp.value) return;
-    tasks.unshift({ text: inp.value, diff: Number(document.getElementById('task-diff').value), done: false });
+    tasks.unshift({ 
+        text: inp.value, 
+        diff: Number(document.getElementById('task-diff').value), 
+        done: false,
+        createdAt: new Date().toLocaleDateString('cs-CZ')
+    });
     inp.value = '';
     
-    // Automaticky otevřít seznam aktivních úkolů
     document.getElementById('pending-list').classList.add('show');
     document.getElementById('arrow-pending-list').innerText = '▼';
     
@@ -170,5 +191,44 @@ function save() {
     localStorage.setItem('r_avatar', JSON.stringify(avatar));
     localStorage.setItem('r_food', food);
 }
+
+window.startEdit = (i) => {
+    const pList = document.getElementById('pending-list');
+    const items = pList.querySelectorAll('.task-item');
+    
+    // Najdeme správný li element podle indexu v tasks (s ohledem na filter)
+    let visibleIndex = 0;
+    tasks.forEach((t, idx) => {
+        if (t.done) return;
+        if (filterType !== 'all' && t.diff.toString() !== filterType) return;
+        if (idx === i) {
+            const li = items[visibleIndex];
+            li.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+                    <input id="edit-input-${i}" value="${t.text}" style="width:100%; padding:8px; border-radius:8px;">
+                    <div style="display:flex; gap:8px;">
+                        <select id="edit-diff-${i}" style="flex:1; padding:8px; border-radius:8px;">
+                            <option value="10" ${t.diff==10?'selected':''}>Lehký (10 XP)</option>
+                            <option value="30" ${t.diff==30?'selected':''}>Střední (30 XP)</option>
+                            <option value="50" ${t.diff==50?'selected':''}>Těžký (50 XP)</option>
+                        </select>
+                        <button onclick="saveEdit(${i})" style="background:var(--success);border:none;padding:8px 14px;border-radius:8px;cursor:pointer;color:white;font-weight:bold;">Uložit</button>
+                        <button onclick="renderTasks()" style="background:#30363d;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;color:white;">Zrušit</button>
+                    </div>
+                </div>
+            `;
+        }
+        visibleIndex++;
+    });
+};
+
+window.saveEdit = (i) => {
+    const newText = document.getElementById(`edit-input-${i}`).value.trim();
+    const newDiff = Number(document.getElementById(`edit-diff-${i}`).value);
+    if (!newText) return;
+    tasks[i].text = newText;
+    tasks[i].diff = newDiff;
+    updateUI();
+};
 
 init();
